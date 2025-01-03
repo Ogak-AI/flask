@@ -1,7 +1,8 @@
-from flask import Flask, render_template, request, redirect
-import yt_dlp as youtube_dl
+from flask import Flask, render_template, request, redirect, flash, url_for
+import subprocess
 
 app = Flask(__name__)
+app.secret_key = 'supersecretkey'  # For flash messages
 
 @app.route("/")
 def index():
@@ -10,22 +11,19 @@ def index():
 @app.route('/download', methods=['POST'])
 def download_video():
     url = request.form['url']
-    
     cookies_file = "/home/ec2-user/Demo_Youtube_Downloader/cookies.txt"
 
-    ydl_opts = {
-        'format': 'best',
-        'cookies': cookies_file,
-    }
-
     try:
-        with youtube_dl.YoutubeDL(ydl_opts) as ydl:
-            info_dict = ydl.extract_info(url, download=False)
-            formats = info_dict.get('formats', [info_dict])
-            video_url = next(f['url'] for f in formats if f['format_id'] == 'best')
+        # Run the yt-dlp command with cookies
+        result = subprocess.run(
+            ["yt-dlp", "--cookies", cookies_file, "--get-url", url],
+            capture_output=True, text=True, check=True
+        )
+        video_url = result.stdout.strip()
         return redirect(video_url)
-    except youtube_dl.utils.DownloadError as e:
-        return str(e)
+    except subprocess.CalledProcessError as e:
+        flash(f"Error: {e.stderr}")
+        return redirect(url_for('index'))
 
 if __name__ == '__main__':
     app.run(host="0.0.0.0", port=80)
